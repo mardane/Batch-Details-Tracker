@@ -1,0 +1,201 @@
+@page "/batches"
+@rendermode InteractiveServer
+@using BatchDetailsTracker.Web.Models
+@using BatchDetailsTracker.Web.Services
+@inject BatchTrackerService BatchTrackerService
+
+<PageTitle>Batches</PageTitle>
+
+<h1>Batch entry</h1>
+<p class="page-subtitle">Add each Instacart batch to track progress, payout, and daily momentum from desktop or mobile.</p>
+
+@if (!string.IsNullOrWhiteSpace(StatusMessage))
+{
+    <div class="alert alert-success" role="alert">@StatusMessage</div>
+}
+
+<div class="row g-4">
+    <div class="col-12 col-xl-5">
+        <div class="card app-card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Log a new batch</h2>
+
+                <EditForm Model="NewBatch" OnValidSubmit="SaveBatchAsync" FormName="batch-entry-form">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="mb-3" />
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">Batch name</label>
+                            <InputText class="form-control" @bind-Value="NewBatch.BatchName" />
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Store</label>
+                            <InputText class="form-control" @bind-Value="NewBatch.StoreName" />
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Date</label>
+                            <InputDate class="form-control" @bind-Value="NewBatch.BatchDate" />
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Status</label>
+                            <InputSelect class="form-select" @bind-Value="NewBatch.Status">
+                                @foreach (var status in Enum.GetValues<BatchStatus>())
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Orders</label>
+                            <InputNumber class="form-control" @bind-Value="NewBatch.OrdersCount" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Base pay</label>
+                            <InputNumber class="form-control" @bind-Value="NewBatch.BasePay" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Tips</label>
+                            <InputNumber class="form-control" @bind-Value="NewBatch.TipAmount" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Adjustments</label>
+                            <InputNumber class="form-control" @bind-Value="NewBatch.Adjustments" />
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Miles</label>
+                            <InputNumber class="form-control" @bind-Value="NewBatch.MilesDriven" />
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Hours spent</label>
+                            <InputNumber class="form-control" @bind-Value="NewBatch.HoursSpent" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <InputTextArea class="form-control" rows="3" @bind-Value="NewBatch.Notes" />
+                        </div>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Save batch</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-7">
+        <div class="card app-card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">Recent activity</h2>
+                        <p class="text-muted mb-0">Your latest batches and their current performance.</p>
+                    </div>
+                    <span class="badge rounded-pill text-bg-light px-3 py-2">@BatchItems.Count batch(es)</span>
+                </div>
+
+                @if (BatchItems.Count == 0)
+                {
+                    <p class="text-muted mb-0">No batches yet. Add your first entry to start tracking.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Batch</th>
+                                    <th>Status</th>
+                                    <th>Orders</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var batch in BatchItems.Take(8))
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@batch.BatchName</div>
+                                            <div class="small text-muted">@batch.StoreName • @batch.BatchDate.ToString("MMM dd")</div>
+                                        </td>
+                                        <td>
+                                            <span class="status-pill @GetStatusClass(batch.Status)">@batch.Status</span>
+                                        </td>
+                                        <td>@batch.OrdersCount</td>
+                                        <td class="fw-semibold">@batch.TotalEarnings.ToString("C")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<BatchRecord> BatchItems = [];
+    private BatchRecord NewBatch = CreateDefaultBatch();
+    private string? StatusMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBatchesAsync();
+    }
+
+    private async Task SaveBatchAsync()
+    {
+        await BatchTrackerService.AddBatchAsync(new BatchRecord
+        {
+            BatchName = NewBatch.BatchName,
+            StoreName = NewBatch.StoreName,
+            BatchDate = NewBatch.BatchDate,
+            Status = NewBatch.Status,
+            OrdersCount = NewBatch.OrdersCount,
+            BasePay = NewBatch.BasePay,
+            TipAmount = NewBatch.TipAmount,
+            Adjustments = NewBatch.Adjustments,
+            MilesDriven = NewBatch.MilesDriven,
+            HoursSpent = NewBatch.HoursSpent,
+            Notes = NewBatch.Notes
+        });
+
+        StatusMessage = $"Saved '{NewBatch.BatchName}' successfully.";
+        NewBatch = CreateDefaultBatch();
+        await LoadBatchesAsync();
+    }
+
+    private async Task LoadBatchesAsync()
+    {
+        BatchItems = (await BatchTrackerService.GetBatchesAsync()).ToList();
+    }
+
+    private static BatchRecord CreateDefaultBatch() => new()
+    {
+        BatchDate = DateTime.Today,
+        BatchName = "Morning Batch",
+        StoreName = "Instacart",
+        Status = BatchStatus.Active,
+        OrdersCount = 1,
+        HoursSpent = 1
+    };
+
+    private static string GetStatusClass(BatchStatus status) => status switch
+    {
+        BatchStatus.Completed => "status-completed",
+        BatchStatus.Active => "status-active",
+        _ => "status-cancelled"
+    };
+}
